@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Panier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="view-signin" class="view">
+  <form id="signin-form" class="signin-form">
+    <h1>Panier</h1>
+    <label for="signin-email">Email</label>
+    <input id="signin-email" type="email" autocomplete="username" required>
+    <label for="signin-password">Password</label>
+    <input id="signin-password" type="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+    <p id="signin-error" class="error" role="alert" hidden></p>
+  </form>
+</div>
+
+<div id="view-list" class="view" hidden>
+  <header class="app-header">
+    <h1>Panier</h1>
+    <button id="open-settings" class="icon-button" type="button" aria-label="Settings">Settings</button>
+  </header>
+
+  <form id="add-item-form" class="add-item-form">
+    <input id="add-item-name" type="text" placeholder="Add an item" required autocomplete="off">
+    <input id="add-item-qty" type="text" placeholder="qty (optional)" autocomplete="off" class="qty-input">
+    <button type="submit">Add</button>
+  </form>
+
+  <p id="remaining-count" class="remaining-count"></p>
+
+  <ul id="item-list" class="item-list"></ul>
+
+  <button id="clear-checked" type="button" class="secondary-button">Clear checked</button>
+</div>
+
+<div id="view-settings" class="view" hidden>
+  <header class="app-header">
+    <h1>Settings</h1>
+    <button id="close-settings" class="icon-button" type="button" aria-label="Back to list">Back</button>
+  </header>
+
+  <section class="settings-section">
+    <h2>Your data</h2>
+    <button id="export-data" type="button" class="secondary-button">Export all data</button>
+  </section>
+
+  <section class="settings-section">
+    <h2>Demo data</h2>
+    <p class="hint">Loads a sample list so you can try the app. Removing it never touches items you added yourself.</p>
+    <button id="load-demo" type="button" class="secondary-button">Load demo data</button>
+    <button id="remove-demo" type="button" class="secondary-button">Remove demo data</button>
+    <p id="demo-status" class="hint"></p>
+  </section>
+
+  <section class="settings-section">
+    <button id="sign-out" type="button" class="secondary-button">Sign out</button>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
