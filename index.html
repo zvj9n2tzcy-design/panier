@@ -29,10 +29,16 @@
     </div>
   </header>
 
+  <div id="offline-banner" class="offline-banner" hidden>Offline — showing the last synced copy. Checking items off still works and will sync once you're back online; adding or deleting needs a connection.</div>
+
   <div class="list-switcher-row">
     <label for="list-switcher" class="visually-hidden">Current list</label>
     <select id="list-switcher"></select>
     <button id="new-list-btn" type="button" class="icon-button" aria-label="New list">+ List</button>
+  </div>
+  <div class="list-switcher-row">
+    <label for="layout-switcher" class="visually-hidden">Store layout</label>
+    <select id="layout-switcher"></select>
   </div>
 
   <form id="add-item-form" class="add-item-form">
@@ -64,6 +70,11 @@
     <div id="frequents-list" class="frequents-list"></div>
   </section>
 
+  <section id="missing-section" class="frequents-section" hidden>
+    <h2>You usually have these by now</h2>
+    <div id="missing-list" class="frequents-list"></div>
+  </section>
+
   <p id="remaining-count" class="remaining-count"></p>
 
   <div id="item-groups"></div>
@@ -87,6 +98,57 @@
     <ul id="templates-manage" class="manage-list"></ul>
     <h2>Archived lists</h2>
     <ul id="archived-manage" class="manage-list"></ul>
+  </section>
+
+  <section class="settings-section">
+    <h2>Sharing</h2>
+    <p class="hint">Sharing applies to the list currently open: <strong id="sharing-list-name"></strong></p>
+    <ul id="members-manage" class="manage-list"></ul>
+    <button id="create-invite-btn" type="button" class="secondary-button">Create invite link</button>
+    <div id="invite-link-box" class="hint" hidden>
+      <p>Share this link with the person you're inviting:</p>
+      <input id="invite-link-text" type="text" readonly>
+      <button id="copy-invite-link" type="button" class="secondary-button">Copy link</button>
+    </div>
+    <button id="leave-list-btn" type="button" class="secondary-button">Leave this list</button>
+  </section>
+
+  <section class="settings-section">
+    <h2>Recipes</h2>
+    <ul id="recipes-manage" class="manage-list"></ul>
+    <button id="new-recipe-btn" type="button" class="secondary-button">New recipe</button>
+    <div id="recipe-form-box" hidden>
+      <input id="recipe-name" type="text" placeholder="Recipe name" autocomplete="off">
+      <input id="recipe-servings" type="number" min="1" value="4" placeholder="Servings">
+      <div id="recipe-ingredients-rows"></div>
+      <button id="add-ingredient-row" type="button" class="secondary-button">+ Ingredient</button>
+      <button id="save-recipe-btn" type="button" class="secondary-button">Save recipe</button>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h2>Store layouts</h2>
+    <ul id="layouts-manage" class="manage-list"></ul>
+    <form id="new-layout-form" class="inline-form">
+      <input id="new-layout-name" type="text" placeholder="New layout name" autocomplete="off">
+      <button type="submit">Add</button>
+    </form>
+    <div id="layout-editor" hidden>
+      <p class="hint">Aisle order for <strong id="layout-editor-name"></strong>:</p>
+      <ul id="layout-editor-rows" class="manage-list"></ul>
+      <button id="close-layout-editor" type="button" class="secondary-button">Done</button>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h2>Import a list</h2>
+    <p class="hint">Paste items, one per line. Nothing is written until you confirm.</p>
+    <textarea id="import-text" rows="4" placeholder="One item per line"></textarea>
+    <button id="preview-import-btn" type="button" class="secondary-button">Preview import</button>
+    <div id="import-preview-box" hidden>
+      <ul id="import-preview-list" class="manage-list"></ul>
+      <button id="confirm-import-btn" type="button" class="secondary-button">Add these items</button>
+    </div>
   </section>
 
   <section class="settings-section">
