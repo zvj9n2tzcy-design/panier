@@ -3,6 +3,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+
 const UNIT_FAMILY = {
   each: "count", dozen: "count",
   g: "mass", kg: "mass",
@@ -25,6 +31,12 @@ let templateLists = [];
 let archivedLists = [];
 let currentListId = null;
 let currentItems = [];
+let listMembers = [];
+let recipes = [];
+let storeLayouts = [];
+let currentLayoutCategoryOrder = null;
+let realtimeChannel = null;
+let editingLayoutId = null;
 
 // ---------- elements ----------
 const viewSignin = document.getElementById("view-signin");
@@ -49,6 +61,10 @@ const multiAddText = document.getElementById("multi-add-text");
 
 const frequentsSection = document.getElementById("frequents-section");
 const frequentsList = document.getElementById("frequents-list");
+const missingSection = document.getElementById("missing-section");
+const missingList = document.getElementById("missing-list");
+const offlineBanner = document.getElementById("offline-banner");
+const layoutSwitcher = document.getElementById("layout-switcher");
 
 const remainingCountEl = document.getElementById("remaining-count");
 const itemGroupsEl = document.getElementById("item-groups");
@@ -71,6 +87,37 @@ const categoriesManageEl = document.getElementById("categories-manage");
 const newCategoryForm = document.getElementById("new-category-form");
 const newCategoryName = document.getElementById("new-category-name");
 const catalogueManageEl = document.getElementById("catalogue-manage");
+
+const sharingListNameEl = document.getElementById("sharing-list-name");
+const membersManageEl = document.getElementById("members-manage");
+const createInviteBtn = document.getElementById("create-invite-btn");
+const inviteLinkBox = document.getElementById("invite-link-box");
+const inviteLinkText = document.getElementById("invite-link-text");
+const copyInviteLinkBtn = document.getElementById("copy-invite-link");
+const leaveListBtn = document.getElementById("leave-list-btn");
+
+const recipesManageEl = document.getElementById("recipes-manage");
+const newRecipeBtn = document.getElementById("new-recipe-btn");
+const recipeFormBox = document.getElementById("recipe-form-box");
+const recipeNameInput = document.getElementById("recipe-name");
+const recipeServingsInput = document.getElementById("recipe-servings");
+const recipeIngredientsRows = document.getElementById("recipe-ingredients-rows");
+const addIngredientRowBtn = document.getElementById("add-ingredient-row");
+const saveRecipeBtn = document.getElementById("save-recipe-btn");
+
+const layoutsManageEl = document.getElementById("layouts-manage");
+const newLayoutForm = document.getElementById("new-layout-form");
+const newLayoutName = document.getElementById("new-layout-name");
+const layoutEditor = document.getElementById("layout-editor");
+const layoutEditorName = document.getElementById("layout-editor-name");
+const layoutEditorRows = document.getElementById("layout-editor-rows");
+const closeLayoutEditorBtn = document.getElementById("close-layout-editor");
+
+const importText = document.getElementById("import-text");
+const previewImportBtn = document.getElementById("preview-import-btn");
+const importPreviewBox = document.getElementById("import-preview-box");
+const importPreviewList = document.getElementById("import-preview-list");
+const confirmImportBtn = document.getElementById("confirm-import-btn");
 
 // ---------- helpers ----------
 function showView(view) {
@@ -136,7 +183,15 @@ toggleThemeBtn.addEventListener("click", () => {
 applyTheme();
 
 // ---------- init ----------
+function pendingInviteToken() {
+  const params = new URLSearchParams(location.search);
+  return params.get("invite");
+}
+
 async function init() {
+  const invite = pendingInviteToken();
+  if (invite) localStorage.setItem("panier-pending-invite", invite);
+
   const session = await getSession();
   if (session) {
     showView(viewList);
@@ -146,11 +201,24 @@ async function init() {
   }
 }
 
+async function acceptPendingInviteIfAny() {
+  const token = localStorage.getItem("panier-pending-invite");
+  if (!token) return;
+  localStorage.removeItem("panier-pending-invite");
+  history.replaceState(null, "", location.pathname);
+  const { data, error } = await client.rpc("accept_invite", { invite_token: token });
+  if (error) { alert("That invite link didn't work: " + error.message); return; }
+  await loadLists();
+  currentListId = data;
+  localStorage.setItem("panier-current-list", currentListId);
+}
+
 async function bootstrapAccount() {
   await ensureDefaultCategories();
   await loadCategories();
   await loadCatalogue();
   await loadLists();
+  await acceptPendingInviteIfAny();
   const saved = localStorage.getItem("panier-current-list");
   const stillExists = activeLists.find(l => l.id === saved);
   currentListId = stillExists ? saved : (activeLists[0] ? activeLists[0].id : null);
@@ -159,8 +227,20 @@ async function bootstrapAccount() {
     await loadLists();
   }
   renderListSwitcher();
+  await loadStoreLayouts();
+  renderLayoutSwitcher();
+  await loadMembers();
   await loadItems();
   renderFrequents();
+  renderMissing();
+  await loadRecipes();
+  subscribeRealtime(currentListId);
+  updateOfflineBanner();
+}
+
+window.addEventListener("offline", updateOfflineBanner);
+function updateOfflineBanner() {
+  offlineBanner.hidden = navigator.onLine;
 }
 
 async function ensureDefaultCategories() {
@@ -197,19 +277,37 @@ openSettingsBtn.addEventListener("click", async () => {
   renderListsManage();
   renderCategoriesManage();
   renderCatalogueManage();
+  const list = activeLists.find(l => l.id === currentListId);
+  sharingListNameEl.textContent = list ? list.name : "";
+  inviteLinkBox.hidden = true;
+  await loadMembers();
+  renderMembers();
+  await loadRecipes();
+  renderRecipesManage();
+  await loadStoreLayouts();
+  renderLayoutsManage();
 });
 closeSettingsBtn.addEventListener("click", async () => {
   showView(viewList);
   await loadLists();
+  if (!activeLists.find(l => l.id === currentListId)) {
+    currentListId = activeLists[0] ? activeLists[0].id : await createList("My list");
+    await loadLists();
+  }
+  localStorage.setItem("panier-current-list", currentListId);
   renderListSwitcher();
+  await loadStoreLayouts();
+  renderLayoutSwitcher();
+  await loadMembers();
   await loadItems();
   renderFrequents();
+  renderMissing();
+  subscribeRealtime(currentListId);
 });
 
 // ---------- lists ----------
 async function loadLists() {
-  const session = await getSession();
-  const { data, error } = await client.from("lists").select("*").eq("user_id", session.user.id).order("position", { ascending: true });
+  const { data, error } = await client.from("lists").select("*").order("position", { ascending: true });
   if (error) { alert("Could not load lists: " + error.message); return; }
   activeLists = (data || []).filter(l => !l.is_archived && !l.is_template);
   templateLists = (data || []).filter(l => l.is_template);
@@ -237,10 +335,20 @@ function renderListSwitcher() {
   });
 }
 
-listSwitcher.addEventListener("change", async () => {
-  currentListId = listSwitcher.value;
+async function switchToList(id) {
+  currentListId = id;
   localStorage.setItem("panier-current-list", currentListId);
+  renderListSwitcher();
+  renderLayoutSwitcher();
+  await loadMembers();
   await loadItems();
+  renderFrequents();
+  renderMissing();
+  subscribeRealtime(currentListId);
+}
+
+listSwitcher.addEventListener("change", async () => {
+  await switchToList(listSwitcher.value);
 });
 
 newListBtn.addEventListener("click", async () => {
@@ -249,10 +357,7 @@ newListBtn.addEventListener("click", async () => {
   const id = await createList(name.trim());
   if (!id) return;
   await loadLists();
-  currentListId = id;
-  localStorage.setItem("panier-current-list", currentListId);
-  renderListSwitcher();
-  await loadItems();
+  await switchToList(id);
 });
 
 function renderListsManage() {
@@ -467,7 +572,60 @@ async function upsertCatalogue(name, categoryId) {
       user_id: session.user.id, normalized_name: norm, display_name: name, category_id: categoryId || null,
     });
   }
+  await client.from("catalogue_history").insert({ user_id: session.user.id, normalized_name: norm });
   await loadCatalogue();
+}
+
+async function computeMissingItems() {
+  const session = await getSession();
+  const { data: history } = await client.from("catalogue_history").select("normalized_name, added_at").eq("user_id", session.user.id);
+  if (!history || !history.length) return [];
+  const byName = new Map();
+  history.forEach(h => {
+    if (!byName.has(h.normalized_name)) byName.set(h.normalized_name, []);
+    byName.get(h.normalized_name).push(new Date(h.added_at).getTime());
+  });
+  const currentNorms = new Set(currentItems.map(i => normalizeName(i.name)));
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const missing = [];
+  byName.forEach((times, norm) => {
+    if (times.length < 2 || currentNorms.has(norm)) return;
+    times.sort((a, b) => a - b);
+    const first = times[0], last = times[times.length - 1];
+    const intervalDays = (last - first) / dayMs / (times.length - 1);
+    const elapsedDays = (now - last) / dayMs;
+    if (intervalDays > 0 && elapsedDays > intervalDays) {
+      const entry = catalogue.find(c => c.normalized_name === norm);
+      if (entry) missing.push({ display_name: entry.display_name, overdueRatio: elapsedDays / intervalDays });
+    }
+  });
+  missing.sort((a, b) => b.overdueRatio - a.overdueRatio);
+  return missing.slice(0, 6);
+}
+
+async function renderMissing() {
+  const missing = await computeMissingItems();
+  missingSection.hidden = missing.length === 0;
+  missingList.innerHTML = "";
+  missing.forEach(m => {
+    const chip = document.createElement("span");
+    chip.className = "frequent-chip";
+    const label = document.createElement("span");
+    label.textContent = m.display_name;
+    chip.appendChild(label);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "+";
+    btn.setAttribute("aria-label", `Add ${m.display_name} to the list`);
+    btn.addEventListener("click", async () => {
+      await addItemToCurrentList(m.display_name, null, null);
+      await loadItems();
+      renderMissing();
+    });
+    chip.appendChild(btn);
+    missingList.appendChild(chip);
+  });
 }
 
 function renderFrequents() {
@@ -514,18 +672,69 @@ function renderCatalogueManage() {
 }
 
 // ---------- items ----------
+function cacheKey(listId) { return `panier-cache-${listId}`; }
+function queueKey(listId) { return `panier-queue-${listId}`; }
+
+function readQueue(listId) {
+  try { return JSON.parse(localStorage.getItem(queueKey(listId)) || "[]"); } catch { return []; }
+}
+function writeQueue(listId, queue) {
+  localStorage.setItem(queueKey(listId), JSON.stringify(queue));
+}
+function applyQueueToItems(items, queue) {
+  const byId = new Map(items.map(i => [i.id, { ...i }]));
+  queue.forEach(op => {
+    if (op.type === "toggle" && byId.has(op.itemId)) {
+      byId.get(op.itemId).state = op.newState;
+    }
+  });
+  return [...byId.values()];
+}
+
 async function loadItems() {
+  if (!currentListId) return;
+  if (!navigator.onLine) {
+    const cached = JSON.parse(localStorage.getItem(cacheKey(currentListId)) || "[]");
+    currentItems = applyQueueToItems(cached, readQueue(currentListId));
+    renderItems(currentItems);
+    return;
+  }
   const session = await getSession();
-  if (!session || !currentListId) return;
+  if (!session) return;
   const { data, error } = await client.from("items")
     .select("*")
-    .eq("user_id", session.user.id)
     .eq("list_id", currentListId)
     .order("created_at", { ascending: true });
-  if (error) { alert("Could not load items: " + error.message); return; }
+  if (error) {
+    const cached = JSON.parse(localStorage.getItem(cacheKey(currentListId)) || "[]");
+    currentItems = applyQueueToItems(cached, readQueue(currentListId));
+    renderItems(currentItems);
+    return;
+  }
   currentItems = data || [];
+  localStorage.setItem(cacheKey(currentListId), JSON.stringify(currentItems));
   renderItems(currentItems);
 }
+
+async function flushOfflineQueue(listId) {
+  const queue = readQueue(listId);
+  if (!queue.length) return;
+  for (const op of queue) {
+    if (op.type === "toggle") {
+      const session = await getSession();
+      await client.from("items").update({
+        state: op.newState, checked_by: op.newState === "got" ? session.user.id : null,
+      }).eq("id", op.itemId);
+    }
+  }
+  writeQueue(listId, []);
+  if (listId === currentListId) await loadItems();
+}
+
+window.addEventListener("online", () => {
+  updateOfflineBanner();
+  if (currentListId) flushOfflineQueue(currentListId);
+});
 
 async function addItemToCurrentList(name, amount, unit) {
   const session = await getSession();
@@ -549,6 +758,7 @@ async function addItemToCurrentList(name, amount, unit) {
   const { error } = await client.from("items").insert({
     user_id: session.user.id, list_id: currentListId, name,
     qty_amount: amount, qty_unit: unit, category_id, state: "to_get",
+    added_by: session.user.id,
   });
   if (error) { alert("Could not add item: " + error.message); return; }
   await upsertCatalogue(name, category_id);
@@ -558,6 +768,10 @@ addItemForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = addItemName.value.trim();
   if (!name) return;
+  if (!navigator.onLine) {
+    alert("You're offline. You can still check items off; adding new ones needs a connection.");
+    return;
+  }
   const amountRaw = addItemQty.value.trim();
   const amount = amountRaw === "" ? null : parseFloat(amountRaw);
   const unit = amount === null ? null : addItemUnit.value;
@@ -611,10 +825,8 @@ multiAddForm.addEventListener("submit", async (e) => {
 });
 
 clearCheckedBtn.addEventListener("click", async () => {
-  const session = await getSession();
   const { error } = await client.from("items")
     .delete()
-    .eq("user_id", session.user.id)
     .eq("list_id", currentListId)
     .eq("state", "got");
   if (error) { alert("Could not clear checked items: " + error.message); return; }
@@ -657,7 +869,7 @@ function renderItems(items) {
   });
 
   itemGroupsEl.innerHTML = "";
-  categories.forEach(c => {
+  getEffectiveCategoryOrder().forEach(c => {
     if (groups.has(c.id)) renderGroup(c.name, groups.get(c.id));
   });
   if (groups.has("other")) renderGroup("Other", groups.get("other"));
@@ -698,7 +910,17 @@ function renderItemRow(item) {
   checkbox.setAttribute("aria-label", `Mark ${item.name} as ${item.state === "got" ? "not got" : "got"}`);
   checkbox.addEventListener("change", async () => {
     const newState = checkbox.checked ? "got" : "to_get";
-    const { error } = await client.from("items").update({ state: newState }).eq("id", item.id);
+    if (!navigator.onLine) {
+      const queue = readQueue(currentListId);
+      queue.push({ type: "toggle", itemId: item.id, newState });
+      writeQueue(currentListId, queue);
+      await loadItems();
+      return;
+    }
+    const session = await getSession();
+    const { error } = await client.from("items").update({
+      state: newState, checked_by: newState === "got" ? session.user.id : null,
+    }).eq("id", item.id);
     if (error) { alert("Could not update item: " + error.message); return; }
     await loadItems();
   });
@@ -723,6 +945,15 @@ function renderItemRow(item) {
     noteEl.className = "item-note";
     noteEl.textContent = item.note;
     main.appendChild(noteEl);
+  }
+  if (listMembers.length > 1) {
+    const addedBy = listMembers.find(m => m.user_id === item.added_by);
+    if (addedBy) {
+      const byEl = document.createElement("span");
+      byEl.className = "added-by";
+      byEl.textContent = `added by ${addedBy.profiles ? addedBy.profiles.email : "someone"}`;
+      main.appendChild(byEl);
+    }
   }
 
   li.appendChild(checkbox);
@@ -851,8 +1082,8 @@ function openEditPanel(item, li) {
 // ---------- export ----------
 exportBtn.addEventListener("click", async () => {
   const session = await getSession();
-  const { data: lists } = await client.from("lists").select("*").eq("user_id", session.user.id);
-  const { data: items } = await client.from("items").select("*").eq("user_id", session.user.id);
+  const { data: lists } = await client.from("lists").select("*");
+  const { data: items } = await client.from("items").select("*");
   const { data: cats } = await client.from("categories").select("*").eq("user_id", session.user.id);
   const { data: cat } = await client.from("catalogue_items").select("*").eq("user_id", session.user.id);
   const payload = {
@@ -936,6 +1167,24 @@ loadDemoBtn.addEventListener("click", async () => {
   }));
   const { error: catErr } = await client.from("catalogue_items").upsert(catalogueRows, { onConflict: "user_id,normalized_name" });
 
+  const catIdList = categories.map(c => c.id);
+  const layoutAId = (await client.from("store_layouts").insert({ user_id: session.user.id, name: "Downtown Market", is_demo: true }).select().single()).data.id;
+  const layoutBId = (await client.from("store_layouts").insert({ user_id: session.user.id, name: "Suburban Warehouse", is_demo: true }).select().single()).data.id;
+  const reversed = [...catIdList].reverse();
+  await client.from("store_layout_categories").insert(catIdList.map((cid, i) => ({ layout_id: layoutAId, category_id: cid, position: i })));
+  await client.from("store_layout_categories").insert(reversed.map((cid, i) => ({ layout_id: layoutBId, category_id: cid, position: i })));
+
+  const recipe1 = (await client.from("recipes").insert({ user_id: session.user.id, name: "Pancakes", servings: 4, is_demo: true }).select().single()).data;
+  const recipe2 = (await client.from("recipes").insert({ user_id: session.user.id, name: "Waffles", servings: 4, is_demo: true }).select().single()).data;
+  await client.from("recipe_ingredients").insert([
+    { recipe_id: recipe1.id, name: "Flour", qty_amount: 300, qty_unit: "g", position: 0 },
+    { recipe_id: recipe1.id, name: "Milk", qty_amount: 500, qty_unit: "ml", position: 1 },
+    { recipe_id: recipe1.id, name: "Eggs", qty_amount: 2, qty_unit: "each", position: 2 },
+    { recipe_id: recipe2.id, name: "Flour", qty_amount: 250, qty_unit: "g", position: 0 },
+    { recipe_id: recipe2.id, name: "Milk", qty_amount: 400, qty_unit: "ml", position: 1 },
+    { recipe_id: recipe2.id, name: "Butter", qty_amount: 50, qty_unit: "g", position: 2 },
+  ]);
+
   demoStatus.textContent = (itemsErr || catErr) ? "Could not fully load demo data: " + ((itemsErr || catErr).message) : "Demo data loaded.";
   await loadLists();
   currentListId = mainListId;
@@ -943,6 +1192,11 @@ loadDemoBtn.addEventListener("click", async () => {
   renderListSwitcher();
   renderListsManage();
   await loadCatalogue();
+  await loadStoreLayouts();
+  renderLayoutSwitcher();
+  renderLayoutsManage();
+  await loadRecipes();
+  renderRecipesManage();
   await loadItems();
   renderFrequents();
 });
@@ -952,6 +1206,9 @@ removeDemoBtn.addEventListener("click", async () => {
   await client.from("items").delete().eq("user_id", session.user.id).eq("is_demo", true);
   await client.from("lists").delete().eq("user_id", session.user.id).eq("is_demo", true);
   await client.from("catalogue_items").delete().eq("user_id", session.user.id).eq("is_demo", true);
+  await client.from("catalogue_history").delete().eq("user_id", session.user.id).eq("is_demo", true);
+  await client.from("recipes").delete().eq("user_id", session.user.id).eq("is_demo", true);
+  await client.from("store_layouts").delete().eq("user_id", session.user.id).eq("is_demo", true);
   demoStatus.textContent = "Demo data removed.";
   await loadLists();
   if (!activeLists.find(l => l.id === currentListId)) {
@@ -962,6 +1219,364 @@ removeDemoBtn.addEventListener("click", async () => {
   renderListSwitcher();
   renderListsManage();
   await loadCatalogue();
+  await loadStoreLayouts();
+  renderLayoutSwitcher();
+  renderLayoutsManage();
+  await loadRecipes();
+  renderRecipesManage();
+  await loadItems();
+  renderFrequents();
+});
+
+// ---------- realtime ----------
+function subscribeRealtime(listId) {
+  if (realtimeChannel) {
+    client.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+  if (!listId) return;
+  realtimeChannel = client.channel(`items-list-${listId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "items", filter: `list_id=eq.${listId}` }, () => {
+      loadItems();
+    })
+    .subscribe();
+}
+
+// ---------- sharing ----------
+async function loadMembers() {
+  const { data, error } = await client.from("list_members")
+    .select("user_id, role, profiles(email)")
+    .eq("list_id", currentListId);
+  if (error) { listMembers = []; return; }
+  listMembers = data || [];
+}
+
+function renderMembers() {
+  membersManageEl.innerHTML = "";
+  getSession().then(session => {
+    listMembers.forEach(m => {
+      const li = document.createElement("li");
+      li.className = "manage-row";
+      const name = document.createElement("span");
+      name.className = "manage-name";
+      const email = m.profiles ? m.profiles.email : m.user_id;
+      name.textContent = `${email}${m.role === "owner" ? " (owner)" : ""}`;
+      li.appendChild(name);
+      if (m.role !== "owner" && session && listMembers.find(x => x.user_id === session.user.id && x.role === "owner")) {
+        li.appendChild(makeManageButton("Remove", async () => {
+          await client.from("list_members").delete().eq("list_id", currentListId).eq("user_id", m.user_id);
+          await loadMembers();
+          renderMembers();
+        }));
+      }
+      membersManageEl.appendChild(li);
+    });
+  });
+}
+
+createInviteBtn.addEventListener("click", async () => {
+  const session = await getSession();
+  const { data, error } = await client.from("list_invites").insert({
+    list_id: currentListId, created_by: session.user.id,
+  }).select().single();
+  if (error) { alert("Could not create invite: " + error.message); return; }
+  const link = `${location.origin}${location.pathname}?invite=${data.token}`;
+  inviteLinkText.value = link;
+  inviteLinkBox.hidden = false;
+});
+
+copyInviteLinkBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(inviteLinkText.value);
+    alert("Link copied.");
+  } catch {
+    inviteLinkText.select();
+  }
+});
+
+leaveListBtn.addEventListener("click", async () => {
+  const list = activeLists.find(l => l.id === currentListId);
+  if (!list) return;
+  if (!confirm(`Leave "${list.name}"? You'll lose access but its history stays intact for the others.`)) return;
+  const session = await getSession();
+  await client.from("list_members").delete().eq("list_id", currentListId).eq("user_id", session.user.id);
+  await loadLists();
+  currentListId = activeLists[0] ? activeLists[0].id : await createList("My list");
+  await loadLists();
+  localStorage.setItem("panier-current-list", currentListId);
+  renderListSwitcher();
+  renderListsManage();
+  await loadMembers();
+  renderMembers();
+  await loadItems();
+});
+
+// ---------- store layouts ----------
+async function loadStoreLayouts() {
+  const session = await getSession();
+  const { data, error } = await client.from("store_layouts")
+    .select("*, store_layout_categories(category_id, position)")
+    .eq("user_id", session.user.id);
+  if (error) { storeLayouts = []; return; }
+  storeLayouts = data || [];
+}
+
+function renderLayoutSwitcher() {
+  const list = activeLists.find(l => l.id === currentListId);
+  layoutSwitcher.innerHTML = "";
+  const defaultOpt = document.createElement("option");
+  defaultOpt.value = "";
+  defaultOpt.textContent = "Default aisle order";
+  layoutSwitcher.appendChild(defaultOpt);
+  storeLayouts.forEach(l => {
+    const opt = document.createElement("option");
+    opt.value = l.id;
+    opt.textContent = l.name;
+    if (list && list.layout_id === l.id) opt.selected = true;
+    layoutSwitcher.appendChild(opt);
+  });
+}
+
+layoutSwitcher.addEventListener("change", async () => {
+  const layoutId = layoutSwitcher.value || null;
+  await client.from("lists").update({ layout_id: layoutId }).eq("id", currentListId);
+  await loadLists();
+  await loadItems();
+});
+
+function getEffectiveCategoryOrder() {
+  const list = activeLists.find(l => l.id === currentListId);
+  if (!list || !list.layout_id) return categories;
+  const layout = storeLayouts.find(l => l.id === list.layout_id);
+  if (!layout) return categories;
+  const posMap = new Map((layout.store_layout_categories || []).map(r => [r.category_id, r.position]));
+  return [...categories].sort((a, b) => {
+    const pa = posMap.has(a.id) ? posMap.get(a.id) : 1000 + a.position;
+    const pb = posMap.has(b.id) ? posMap.get(b.id) : 1000 + b.position;
+    return pa - pb;
+  });
+}
+
+function renderLayoutsManage() {
+  layoutsManageEl.innerHTML = "";
+  storeLayouts.forEach(l => {
+    const li = document.createElement("li");
+    li.className = "manage-row";
+    const name = document.createElement("span");
+    name.className = "manage-name";
+    name.textContent = l.name;
+    li.appendChild(name);
+    li.appendChild(makeManageButton("Edit aisle order", () => openLayoutEditor(l)));
+    li.appendChild(makeManageButton("Delete", async () => {
+      if (!confirm(`Delete layout "${l.name}"?`)) return;
+      await client.from("store_layouts").delete().eq("id", l.id);
+      await loadStoreLayouts();
+      renderLayoutsManage();
+      renderLayoutSwitcher();
+    }));
+    layoutsManageEl.appendChild(li);
+  });
+}
+
+newLayoutForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = newLayoutName.value.trim();
+  if (!name) return;
+  const session = await getSession();
+  const { data, error } = await client.from("store_layouts").insert({ user_id: session.user.id, name }).select().single();
+  if (error) { alert("Could not create layout: " + error.message); return; }
+  const rows = categories.map((c, i) => ({ layout_id: data.id, category_id: c.id, position: i }));
+  if (rows.length) await client.from("store_layout_categories").insert(rows);
+  newLayoutName.value = "";
+  await loadStoreLayouts();
+  renderLayoutsManage();
+  renderLayoutSwitcher();
+});
+
+function openLayoutEditor(layout) {
+  editingLayoutId = layout.id;
+  layoutEditorName.textContent = layout.name;
+  layoutEditor.hidden = false;
+  renderLayoutEditorRows();
+}
+
+function renderLayoutEditorRows() {
+  const layout = storeLayouts.find(l => l.id === editingLayoutId);
+  if (!layout) return;
+  const posMap = new Map((layout.store_layout_categories || []).map(r => [r.category_id, r.position]));
+  const ordered = [...categories].sort((a, b) => {
+    const pa = posMap.has(a.id) ? posMap.get(a.id) : 1000 + a.position;
+    const pb = posMap.has(b.id) ? posMap.get(b.id) : 1000 + b.position;
+    return pa - pb;
+  });
+  layoutEditorRows.innerHTML = "";
+  ordered.forEach((c, idx) => {
+    const li = document.createElement("li");
+    li.className = "manage-row";
+    const name = document.createElement("span");
+    name.className = "manage-name";
+    name.textContent = c.name;
+    li.appendChild(name);
+    if (idx > 0) {
+      li.appendChild(makeManageButton("Up", async () => {
+        await swapLayoutCategoryPosition(ordered, idx, idx - 1);
+      }));
+    }
+    if (idx < ordered.length - 1) {
+      li.appendChild(makeManageButton("Down", async () => {
+        await swapLayoutCategoryPosition(ordered, idx, idx + 1);
+      }));
+    }
+    layoutEditorRows.appendChild(li);
+  });
+}
+
+async function swapLayoutCategoryPosition(ordered, i, j) {
+  const layout = storeLayouts.find(l => l.id === editingLayoutId);
+  const posMap = new Map((layout.store_layout_categories || []).map(r => [r.category_id, r.position]));
+  const a = ordered[i], b = ordered[j];
+  const posA = posMap.has(a.id) ? posMap.get(a.id) : 1000 + a.position;
+  const posB = posMap.has(b.id) ? posMap.get(b.id) : 1000 + b.position;
+  await client.from("store_layout_categories").upsert({ layout_id: layout.id, category_id: a.id, position: posB });
+  await client.from("store_layout_categories").upsert({ layout_id: layout.id, category_id: b.id, position: posA });
+  await loadStoreLayouts();
+  renderLayoutEditorRows();
+}
+
+closeLayoutEditorBtn.addEventListener("click", async () => {
+  editingLayoutId = null;
+  layoutEditor.hidden = true;
+  renderLayoutSwitcher();
+  await loadItems();
+});
+
+// ---------- recipes ----------
+async function loadRecipes() {
+  const session = await getSession();
+  const { data, error } = await client.from("recipes")
+    .select("*, recipe_ingredients(*)")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: true });
+  if (error) { recipes = []; return; }
+  recipes = data || [];
+}
+
+function renderRecipesManage() {
+  recipesManageEl.innerHTML = "";
+  recipes.forEach(r => {
+    const li = document.createElement("li");
+    li.className = "manage-row";
+    const name = document.createElement("span");
+    name.className = "manage-name";
+    name.textContent = `${r.name} (serves ${r.servings}, ${(r.recipe_ingredients || []).length} ingredients)`;
+    li.appendChild(name);
+    li.appendChild(makeManageButton("Send to list", () => sendRecipeToList(r)));
+    li.appendChild(makeManageButton("Delete", async () => {
+      if (!confirm(`Delete recipe "${r.name}"?`)) return;
+      await client.from("recipes").delete().eq("id", r.id);
+      await loadRecipes();
+      renderRecipesManage();
+    }));
+    recipesManageEl.appendChild(li);
+  });
+}
+
+async function sendRecipeToList(recipe) {
+  const ingredients = recipe.recipe_ingredients || [];
+  const preview = ingredients.map(i => `- ${i.name}${i.qty_amount ? " (" + formatQty(i.qty_amount, i.qty_unit) + ")" : ""}`).join("\n");
+  if (!confirm(`Add these ingredients from "${recipe.name}" to the current list?\n\n${preview}`)) return;
+  for (const ing of ingredients) {
+    await addItemToCurrentList(ing.name, ing.qty_amount, ing.qty_unit);
+  }
+  await loadItems();
+  renderFrequents();
+}
+
+newRecipeBtn.addEventListener("click", () => {
+  recipeFormBox.hidden = false;
+  recipeNameInput.value = "";
+  recipeServingsInput.value = 4;
+  recipeIngredientsRows.innerHTML = "";
+  addIngredientRow();
+});
+
+function addIngredientRow() {
+  const row = document.createElement("div");
+  row.className = "ingredient-row";
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.placeholder = "Ingredient";
+  const qtyInput = document.createElement("input");
+  qtyInput.type = "number";
+  qtyInput.step = "any";
+  qtyInput.placeholder = "qty";
+  const unitSelect = document.createElement("select");
+  Object.keys(UNIT_FAMILY).forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u; opt.textContent = u;
+    unitSelect.appendChild(opt);
+  });
+  row.appendChild(nameInput);
+  row.appendChild(qtyInput);
+  row.appendChild(unitSelect);
+  recipeIngredientsRows.appendChild(row);
+}
+addIngredientRowBtn.addEventListener("click", addIngredientRow);
+
+saveRecipeBtn.addEventListener("click", async () => {
+  const name = recipeNameInput.value.trim();
+  if (!name) { alert("Give the recipe a name."); return; }
+  const servings = parseInt(recipeServingsInput.value, 10) || 1;
+  const session = await getSession();
+  const { data: recipeRow, error } = await client.from("recipes").insert({ user_id: session.user.id, name, servings }).select().single();
+  if (error) { alert("Could not save recipe: " + error.message); return; }
+  const rows = [];
+  recipeIngredientsRows.querySelectorAll(".ingredient-row").forEach((row, idx) => {
+    const ingName = row.querySelector('input[type="text"]').value.trim();
+    const qtyVal = row.querySelector('input[type="number"]').value.trim();
+    const unit = row.querySelector("select").value;
+    if (!ingName) return;
+    rows.push({
+      recipe_id: recipeRow.id, name: ingName, position: idx,
+      qty_amount: qtyVal === "" ? null : parseFloat(qtyVal),
+      qty_unit: qtyVal === "" ? null : unit,
+    });
+  });
+  if (rows.length) await client.from("recipe_ingredients").insert(rows);
+  recipeFormBox.hidden = true;
+  await loadRecipes();
+  renderRecipesManage();
+});
+
+// ---------- import ----------
+previewImportBtn.addEventListener("click", () => {
+  const lines = importText.value.split("\n").map(l => l.trim()).filter(Boolean);
+  importPreviewList.innerHTML = "";
+  lines.forEach(line => {
+    const li = document.createElement("li");
+    li.className = "manage-row";
+    const label = document.createElement("label");
+    label.className = "manage-name";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+    cb.className = "import-checkbox";
+    cb.value = line;
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(" " + line));
+    li.appendChild(label);
+    importPreviewList.appendChild(li);
+  });
+  importPreviewBox.hidden = lines.length === 0;
+});
+
+confirmImportBtn.addEventListener("click", async () => {
+  const checked = [...importPreviewList.querySelectorAll(".import-checkbox:checked")].map(cb => cb.value);
+  for (const line of checked) {
+    await addItemToCurrentList(line, null, null);
+  }
+  importText.value = "";
+  importPreviewBox.hidden = true;
   await loadItems();
   renderFrequents();
 });
