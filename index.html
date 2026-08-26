@@ -23,20 +23,55 @@
 <div id="view-list" class="view" hidden>
   <header class="app-header">
     <h1>Panier</h1>
-    <button id="open-settings" class="icon-button" type="button" aria-label="Settings">Settings</button>
+    <div class="header-actions">
+      <button id="toggle-theme" class="icon-button" type="button" aria-label="Toggle dark mode">Theme</button>
+      <button id="open-settings" class="icon-button" type="button" aria-label="Settings">Settings</button>
+    </div>
   </header>
 
+  <div class="list-switcher-row">
+    <label for="list-switcher" class="visually-hidden">Current list</label>
+    <select id="list-switcher"></select>
+    <button id="new-list-btn" type="button" class="icon-button" aria-label="New list">+ List</button>
+  </div>
+
   <form id="add-item-form" class="add-item-form">
-    <input id="add-item-name" type="text" placeholder="Add an item" required autocomplete="off">
-    <input id="add-item-qty" type="text" placeholder="qty (optional)" autocomplete="off" class="qty-input">
+    <input id="add-item-name" type="text" placeholder="Add an item" required autocomplete="off" aria-label="Item name">
+    <input id="add-item-qty" type="number" min="0" step="any" placeholder="qty" autocomplete="off" class="qty-input" aria-label="Quantity amount">
+    <select id="add-item-unit" class="unit-select" aria-label="Unit">
+      <option value="each">each</option>
+      <option value="dozen">dozen</option>
+      <option value="g">g</option>
+      <option value="kg">kg</option>
+      <option value="ml">ml</option>
+      <option value="L">L</option>
+      <option value="pack">pack</option>
+      <option value="box">box</option>
+      <option value="bag">bag</option>
+    </select>
     <button type="submit">Add</button>
+    <div id="autocomplete-list" class="autocomplete-list" hidden></div>
   </form>
+  <button id="toggle-multiadd" type="button" class="link-button">Add several at once</button>
+  <form id="multi-add-form" class="multi-add-form" hidden>
+    <label for="multi-add-text" class="visually-hidden">One item per line</label>
+    <textarea id="multi-add-text" rows="4" placeholder="One item per line"></textarea>
+    <button type="submit">Add all</button>
+  </form>
+
+  <section id="frequents-section" class="frequents-section" hidden>
+    <h2>Frequent items</h2>
+    <div id="frequents-list" class="frequents-list"></div>
+  </section>
 
   <p id="remaining-count" class="remaining-count"></p>
 
-  <ul id="item-list" class="item-list"></ul>
+  <div id="item-groups"></div>
 
-  <button id="clear-checked" type="button" class="secondary-button">Clear checked</button>
+  <div class="list-footer-actions">
+    <button id="clear-checked" type="button" class="secondary-button">Clear checked</button>
+    <button id="share-list" type="button" class="secondary-button">Share list as text</button>
+  </div>
 </div>
 
 <div id="view-settings" class="view" hidden>
@@ -44,6 +79,30 @@
     <h1>Settings</h1>
     <button id="close-settings" class="icon-button" type="button" aria-label="Back to list">Back</button>
   </header>
+
+  <section class="settings-section">
+    <h2>Lists</h2>
+    <ul id="lists-manage" class="manage-list"></ul>
+    <h2>Templates</h2>
+    <ul id="templates-manage" class="manage-list"></ul>
+    <h2>Archived lists</h2>
+    <ul id="archived-manage" class="manage-list"></ul>
+  </section>
+
+  <section class="settings-section">
+    <h2>Categories</h2>
+    <ul id="categories-manage" class="manage-list"></ul>
+    <form id="new-category-form" class="inline-form">
+      <input id="new-category-name" type="text" placeholder="New category" autocomplete="off">
+      <button type="submit">Add</button>
+    </form>
+  </section>
+
+  <section class="settings-section">
+    <h2>Catalogue</h2>
+    <p class="hint">Every item you've ever added. Removing one here does not touch any list it's on.</p>
+    <ul id="catalogue-manage" class="manage-list"></ul>
+  </section>
 
   <section class="settings-section">
     <h2>Your data</h2>
