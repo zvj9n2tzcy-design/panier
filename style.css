@@ -402,3 +402,35 @@ button.link-button {
 }
 
 .inline-form input { margin-bottom: 0; }
+
+.offline-banner {
+  background: var(--checked-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+#recipe-form-box, #layout-editor, #import-preview-box, #invite-link-box {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.ingredient-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.ingredient-row input { margin-bottom: 0; }
+.ingredient-row input[type="text"] { flex: 2 1 8rem; }
+.ingredient-row input[type="number"] { flex: 1 1 4rem; }
+.ingredient-row select { flex: 1 1 5rem; margin-bottom: 0; }
+
+.added-by {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
