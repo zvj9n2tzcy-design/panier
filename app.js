@@ -140,7 +140,7 @@ function renderItems(items) {
 
 function renderItemRow(item) {
   const li = document.createElement("li");
-  li.className = "item-row";
+  li.className = "item-row" + (item.state === "got" ? " checked" : "");
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
