@@ -165,11 +165,11 @@ async function bootstrapAccount() {
 
 async function ensureDefaultCategories() {
   const session = await getSession();
-  const { count } = await client.from("categories").select("id", { count: "exact", head: true }).eq("user_id", session.user.id);
-  if (count === 0) {
-    const rows = DEFAULT_CATEGORIES.map((name, i) => ({ user_id: session.user.id, name, position: i }));
-    await client.from("categories").insert(rows);
-  }
+  const { data: settings } = await client.from("user_settings").select("categories_seeded").eq("user_id", session.user.id).maybeSingle();
+  if (settings && settings.categories_seeded) return;
+  const rows = DEFAULT_CATEGORIES.map((name, i) => ({ user_id: session.user.id, name, position: i }));
+  await client.from("categories").insert(rows);
+  await client.from("user_settings").upsert({ user_id: session.user.id, categories_seeded: true });
 }
 
 signinForm.addEventListener("submit", async (e) => {
