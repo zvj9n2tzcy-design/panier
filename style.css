@@ -1,0 +1,195 @@
+:root {
+  color-scheme: light;
+  --fg: #1a1a1a;
+  --bg: #ffffff;
+  --border: #d0d0d0;
+  --muted: #666666;
+  --danger: #b3261e;
+  font-size: 16px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.4;
+}
+
+.view {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1rem;
+  min-height: 100vh;
+}
+
+h1 { font-size: 1.4rem; margin: 0.5rem 0 1rem; }
+h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+
+input, button {
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+button.secondary-button {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button.icon-button {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.75rem;
+}
+
+.signin-form {
+  display: flex;
+  flex-direction: column;
+  margin-top: 3rem;
+}
+
+.signin-form label { margin-bottom: 0.25rem; font-weight: 600; }
+
+.error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.add-item-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.add-item-form input[type="text"] { margin-bottom: 0; }
+
+#add-item-name { flex: 2 1 10rem; }
+.qty-input { flex: 1 1 6rem; }
+.add-item-form button { flex: 0 0 auto; height: 44px; }
+
+.remaining-count {
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.item-row input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.item-name {
+  display: block;
+  word-break: break-word;
+}
+
+.item-name.got {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.item-qty {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.got-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.item-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.item-actions button {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.list-divider {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.settings-section {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
